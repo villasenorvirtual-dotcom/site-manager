@@ -659,6 +659,28 @@
         <div class="photo-preview-grid" id="photoPreviewGrid"></div>
       </div>
 
+      <div class="form-group">
+        <label class="form-label">Videos</label>
+        <div class="photo-drop-zone" id="videoDropZone" onclick="document.getElementById('videoInput').click()">
+          <i class="fas fa-video"></i>
+          <p>Toca para seleccionar videos</p>
+          <small>MP4, MOV — Maximo 15MB cada uno — 3 videos</small>
+          <input type="file" id="videoInput" accept="video/*" multiple onchange="handleVideoFiles(this.files)">
+        </div>
+        <div class="photo-preview-grid" id="videoPreviewGrid"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Documentos PDF</label>
+        <div class="photo-drop-zone" id="pdfDropZone" onclick="document.getElementById('pdfInput').click()">
+          <i class="fas fa-file-pdf"></i>
+          <p>Toca para seleccionar PDFs</p>
+          <small>Maximo 10MB cada uno — 5 documentos</small>
+          <input type="file" id="pdfInput" accept=".pdf,application/pdf" multiple onchange="handlePdfFiles(this.files)">
+        </div>
+        <div id="pdfPreviewList" style="margin-top:12px;"></div>
+      </div>
+
       <div class="form-group" style="display:flex;align-items:center;gap:12px;">
         <label class="toggle">
           <input type="checkbox" id="postPublished" checked>
@@ -666,6 +688,15 @@
           <div class="toggle-thumb"></div>
         </label>
         <span style="font-size:14px;font-weight:500;">Publicar inmediatamente</span>
+      </div>
+
+      <div class="form-group" style="display:flex;align-items:center;gap:12px;">
+        <label class="toggle">
+          <input type="checkbox" id="sendNotification" checked>
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+        <span style="font-size:14px;font-weight:500;">Enviar notificacion a la comunidad</span>
       </div>
 
       <button class="btn btn-primary" type="button" onclick="savePost()" id="saveBtn">
@@ -801,14 +832,8 @@
 </div>
 
 <script>
-// ===================================================================
-// PEGA AQUÍ TU NUEVA URL DEL APPS SCRIPT (la del Paso 2)
-// ===================================================================
-const API_URL = 'https://script.google.com/macros/s/AKfycbxU258QYcZZhMcgcFfNFW05Wdc-Odjd7kx3mnM4-yFsF7Vn24x_Adu55ZCh5RK4ogKc9A/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxiSl2S82UmtZLDkorhi-LQtnz23cEZ2nwYQe_B5HwAepdGG_ozL-9XiY4QSiugKW1OaQ/exec';
 
-// ===================================================================
-// TUS 13 PÁGINAS + 1 SUBPÁGINA
-// ===================================================================
 const SITE_PAGES = [
   { id: 'inicio', name: 'Inicio', icon: 'fas fa-home', color: '#00e68a', subpages: [] },
   { id: 'nuestra-escuela', name: 'Nuestra Escuela', icon: 'fas fa-school', color: '#ffa502', subpages: [] },
@@ -827,556 +852,385 @@ const SITE_PAGES = [
   { id: 'valores', name: 'Valores', icon: 'fas fa-star', color: '#20bf6b', subpages: [] }
 ];
 
-// ===================================================================
-// ESTADO
-// ===================================================================
 let posts = [];
 let selectedPhotos = [];
+let selectedVideos = [];
+let selectedPdfs = [];
 let currentFilter = 'todas';
 let editingPostId = null;
 
 // ===================================================================
-// NAVEGACIÓN
+// NAVEGACION
 // ===================================================================
 function navigateTo(screen) {
   document.querySelectorAll('.screen').forEach(function(s) { s.classList.remove('active'); });
-  var screenMap = { home: 'screenHome', create: 'screenCreate', pages: 'screenPages', detail: 'screenDetail', settings: 'screenSettings' };
-  var targetId = screenMap[screen];
-  if (targetId) {
-    var target = document.getElementById(targetId);
-    target.classList.add('active');
-    target.style.animation = 'none';
-    target.offsetHeight;
-    target.style.animation = '';
-  }
+  var map = { home:'screenHome', create:'screenCreate', pages:'screenPages', detail:'screenDetail', settings:'screenSettings' };
+  var t = document.getElementById(map[screen]);
+  if (t) { t.classList.add('active'); t.style.animation='none'; t.offsetHeight; t.style.animation=''; }
   document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
-  var navBtn = document.querySelector('.nav-item[data-screen="' + screen + '"]');
-  if (navBtn) navBtn.classList.add('active');
-  if (screen === 'create' && !editingPostId) resetForm();
-  if (screen === 'home') { updateStats(); renderPosts(); }
-  if (screen === 'pages') renderPages();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  var nb = document.querySelector('.nav-item[data-screen="'+screen+'"]');
+  if (nb) nb.classList.add('active');
+  if (screen==='create' && !editingPostId) resetForm();
+  if (screen==='home') { updateStats(); renderPosts(); }
+  if (screen==='pages') renderPages();
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 // ===================================================================
-// TOASTS
+// TOAST
 // ===================================================================
-function showToast(message, type) {
-  type = type || 'success';
-  var container = document.getElementById('toastContainer');
-  var toast = document.createElement('div');
-  toast.className = 'toast ' + type;
-  var icons = { success: 'fa-check-circle', error: 'fa-exclamation-circle', info: 'fa-info-circle' };
-  toast.innerHTML = '<i class="fas ' + (icons[type] || icons.info) + '"></i> ' + message;
-  container.appendChild(toast);
-  setTimeout(function() { toast.style.animation = 'toastOut 0.3s ease-in forwards'; setTimeout(function() { toast.remove(); }, 300); }, 3000);
+function showToast(msg, type) {
+  type=type||'success';
+  var c=document.getElementById('toastContainer'), t=document.createElement('div');
+  t.className='toast '+type;
+  var ic={success:'fa-check-circle',error:'fa-exclamation-circle',info:'fa-info-circle'};
+  t.innerHTML='<i class="fas '+(ic[type]||ic.info)+'"></i> '+msg;
+  c.appendChild(t);
+  setTimeout(function(){t.style.animation='toastOut 0.3s ease-in forwards';setTimeout(function(){t.remove();},300);},3000);
 }
 
 // ===================================================================
-// MODAL
+// MODAL / LIGHTBOX
 // ===================================================================
-function showModal(content) { document.getElementById('modalContent').innerHTML = content; document.getElementById('modalOverlay').classList.add('active'); }
-function closeModal() { document.getElementById('modalOverlay').classList.remove('active'); }
-document.getElementById('modalOverlay').addEventListener('click', function(e) { if (e.target === this) closeModal(); });
+function showModal(c){document.getElementById('modalContent').innerHTML=c;document.getElementById('modalOverlay').classList.add('active');}
+function closeModal(){document.getElementById('modalOverlay').classList.remove('active');}
+document.getElementById('modalOverlay').addEventListener('click',function(e){if(e.target===this)closeModal();});
+function openLightbox(s){document.getElementById('lightboxImg').src=s;document.getElementById('lightbox').classList.add('active');}
+function closeLightbox(){document.getElementById('lightbox').classList.remove('active');}
 
 // ===================================================================
-// LIGHTBOX
+// HELPERS
 // ===================================================================
-function openLightbox(src) { document.getElementById('lightboxImg').src = src; document.getElementById('lightbox').classList.add('active'); }
-function closeLightbox() { document.getElementById('lightbox').classList.remove('active'); }
+function getYoutubeId(url){if(!url)return null;var m=url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);return m?m[1]:null;}
+function getYoutubeThumb(url){var id=getYoutubeId(url);return id?'https://img.youtube.com/vi/'+id+'/hqdefault.jpg':null;}
 
 // ===================================================================
-// YOUTUBE HELPER
+// ESTADISTICAS
 // ===================================================================
-function getYoutubeId(url) {
-  if (!url) return null;
-  var m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/);
-  return m ? m[1] : null;
-}
-
-function getYoutubeThumbnail(url) {
-  var id = getYoutubeId(url);
-  return id ? 'https://img.youtube.com/vi/' + id + '/hqdefault.jpg' : null;
-}
-
-// ===================================================================
-// ESTADÍSTICAS
-// ===================================================================
-function updateStats() {
-  document.getElementById('statTotal').textContent = posts.length;
-  document.getElementById('statPublished').textContent = posts.filter(function(p) { return p.publicado; }).length;
-  var totalPhotos = posts.reduce(function(sum, p) { return sum + (p.fotos ? p.fotos.length : 0); }, 0);
-  document.getElementById('statPhotos').textContent = totalPhotos;
+function updateStats(){
+  document.getElementById('statTotal').textContent=posts.length;
+  document.getElementById('statPublished').textContent=posts.filter(function(p){return p.publicado;}).length;
+  var tp=posts.reduce(function(s,p){return s+(p.fotos?p.fotos.length:0);},0);
+  var tv=posts.reduce(function(s,p){return s+(p.videos?p.videos.length:0);},0);
+  document.getElementById('statPhotos').textContent=tp+tv;
 }
 
 // ===================================================================
 // FILTROS
 // ===================================================================
-function renderFilters() {
-  var container = document.getElementById('filterChips');
-  var html = '<button class="filter-chip ' + (currentFilter === 'todas' ? 'active' : '') + '" onclick="setFilter(\'todas\')">Todas</button>';
-  var usedPages = [];
-  posts.forEach(function(p) { if (usedPages.indexOf(p.paginaId) === -1 && p.paginaId) usedPages.push(p.paginaId); });
-  usedPages.forEach(function(pageId) {
-    var page = findPage(pageId);
-    if (page) html += '<button class="filter-chip ' + (currentFilter === pageId ? 'active' : '') + '" onclick="setFilter(\'' + pageId + '\')">' + page.name + '</button>';
-  });
-  html += '<button class="filter-chip ' + (currentFilter === 'borradores' ? 'active' : '') + '" onclick="setFilter(\'borradores\')">Borradores</button>';
-  container.innerHTML = html;
+function renderFilters(){
+  var c=document.getElementById('filterChips');
+  var h='<button class="filter-chip '+(currentFilter==='todas'?'active':'')+'" onclick="setFilter(\'todas\')">Todas</button>';
+  var up=[];posts.forEach(function(p){if(up.indexOf(p.paginaId)===-1&&p.paginaId)up.push(p.paginaId);});
+  up.forEach(function(pid){var pg=findPage(pid);if(pg)h+='<button class="filter-chip '+(currentFilter===pid?'active':'')+'" onclick="setFilter(\''+pid+'\')">'+pg.name+'</button>';});
+  h+='<button class="filter-chip '+(currentFilter==='borradores'?'active':'')+'" onclick="setFilter(\'borradores\')">Borradores</button>';
+  c.innerHTML=h;
 }
-
-function setFilter(filter) { currentFilter = filter; renderFilters(); renderPosts(); }
+function setFilter(f){currentFilter=f;renderFilters();renderPosts();}
 
 // ===================================================================
-// RENDERIZAR PUBLICACIONES
+// RENDER POSTS
 // ===================================================================
-function renderPosts() {
-  var container = document.getElementById('postsList');
-  var search = document.getElementById('searchInput').value.toLowerCase().trim();
-  var filtered = posts.slice();
-
-  if (currentFilter === 'borradores') {
-    filtered = filtered.filter(function(p) { return !p.publicado; });
-  } else if (currentFilter !== 'todas') {
-    filtered = filtered.filter(function(p) { return p.paginaId === currentFilter; });
-  }
-  if (search) {
-    filtered = filtered.filter(function(p) {
-      return (p.titulo || '').toLowerCase().indexOf(search) !== -1 || (p.descripcion || '').toLowerCase().indexOf(search) !== -1;
-    });
-  }
-  filtered.sort(function(a, b) { return new Date(b.fechaCreacion) - new Date(a.fechaCreacion); });
+function renderPosts(){
+  var c=document.getElementById('postsList'),s=document.getElementById('searchInput').value.toLowerCase().trim();
+  var f=posts.slice();
+  if(currentFilter==='borradores')f=f.filter(function(p){return !p.publicado;});
+  else if(currentFilter!=='todas')f=f.filter(function(p){return p.paginaId===currentFilter;});
+  if(s)f=f.filter(function(p){return(p.titulo||'').toLowerCase().indexOf(s)!==-1||(p.descripcion||'').toLowerCase().indexOf(s)!==-1;});
+  f.sort(function(a,b){return new Date(b.fechaCreacion)-new Date(a.fechaCreacion);});
   renderFilters();
+  if(f.length===0){c.innerHTML='<div class="empty-state"><i class="fas fa-newspaper"></i><h3>'+(s?'Sin resultados':'Sin publicaciones')+'</h3><p>'+(s?'Intenta con otro termino':'Crea tu primera publicacion')+'</p></div>';return;}
 
-  if (filtered.length === 0) {
-    container.innerHTML = '<div class="empty-state"><i class="fas fa-newspaper"></i><h3>' + (search ? 'Sin resultados' : 'Sin publicaciones') + '</h3><p>' + (search ? 'Intenta con otro termino' : 'Crea tu primera publicacion') + '</p></div>';
-    return;
-  }
+  c.innerHTML=f.map(function(post,idx){
+    var pg=findPage(post.paginaId),pn=pg?pg.name:'Sin pagina',pp=post.fotos||[],ip=post.publicado===true,dt=formatDate(post.fechaCreacion);
+    var ytId=getYoutubeId(post.url),ytTh=getYoutubeThumb(post.url),hl=post.url&&!ytId;
+    var nv=post.videos?post.videos.length:0,np=post.pdfs?post.pdfs.length:0;
 
-  container.innerHTML = filtered.map(function(post, index) {
-    var page = findPage(post.paginaId);
-    var pageName = page ? page.name : 'Sin pagina';
-    var postPhotos = post.fotos || [];
-    var isPublished = post.publicado === true;
-    var date = formatDate(post.fechaCreacion);
-    var ytId = getYoutubeId(post.url);
-    var ytThumb = getYoutubeThumbnail(post.url);
-    var hasLink = post.url && !ytId;
+    var cardImg='';
+    if(ytTh){cardImg='<div style="position:relative;"><img class="post-card-img" src="'+ytTh+'" alt="" loading="lazy"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:56px;height:56px;background:rgba(0,0,0,0.7);border-radius:50%;display:flex;align-items:center;justify-content:center;"><i class="fas fa-play" style="color:white;font-size:22px;margin-left:3px;"></i></div></div>';}
+    else if(nv>0){cardImg='<div class="post-card-img-placeholder" style="background:linear-gradient(135deg,#1a1a2e,#16213e);"><i class="fas fa-video" style="font-size:36px;color:#5dade2;"></i></div>';}
+    else if(pp.length>0){cardImg='<img class="post-card-img" src="'+pp[0]+'" alt="'+escapeHtml(post.titulo)+'" loading="lazy">';}
+    else if(hl){cardImg='<div class="post-card-img-placeholder"><i class="fas fa-link"></i></div>';}
+    else if(np>0){cardImg='<div class="post-card-img-placeholder" style="background:linear-gradient(135deg,#2e1a1a,#3e2121);"><i class="fas fa-file-pdf" style="font-size:36px;color:#e74c3c;"></i></div>';}
+    else{cardImg='<div class="post-card-img-placeholder"><i class="fas fa-image"></i></div>';}
 
-    // Imagen de la tarjeta: YouTube thumb > primera foto > placeholder
-    var cardImg = '';
-    if (ytThumb) {
-      cardImg = '<div style="position:relative;"><img class="post-card-img" src="' + ytThumb + '" alt="" loading="lazy"><div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:56px;height:56px;background:rgba(0,0,0,0.7);border-radius:50%;display:flex;align-items:center;justify-content:center;"><i class="fas fa-play" style="color:white;font-size:22px;margin-left:3px;"></i></div></div>';
-    } else if (postPhotos.length > 0) {
-      cardImg = '<img class="post-card-img" src="' + postPhotos[0] + '" alt="' + escapeHtml(post.titulo) + '" loading="lazy">';
-    } else if (hasLink) {
-      cardImg = '<div class="post-card-img-placeholder"><i class="fas fa-link"></i></div>';
-    } else {
-      cardImg = '<div class="post-card-img-placeholder"><i class="fas fa-image"></i></div>';
-    }
+    var badges='<span class="post-card-page">'+pn+'</span><span class="status-badge '+(ip?'published':'draft')+'">'+(ip?'Publicada':'Borrador')+'</span>';
+    if(ytId)badges+=' <span class="status-badge" style="background:rgba(255,0,0,0.12);color:#ff4444;"><i class="fab fa-youtube" style="margin-right:3px;"></i>Video</span>';
+    if(nv>0)badges+=' <span class="status-badge" style="background:rgba(93,173,226,0.12);color:#5dade2;"><i class="fas fa-video" style="margin-right:3px;"></i>'+nv+'</span>';
+    if(np>0)badges+=' <span class="status-badge" style="background:rgba(231,76,60,0.12);color:#e74c3c;"><i class="fas fa-file-pdf" style="margin-right:3px;"></i>'+np+'</span>';
+    if(hl)badges+=' <span class="status-badge" style="background:rgba(26,115,232,0.12);color:#1a73e8;"><i class="fas fa-external-link-alt" style="margin-right:3px;"></i>Enlace</span>';
 
-    var badges = '<span class="post-card-page">' + pageName + '</span>' +
-      '<span class="status-badge ' + (isPublished ? 'published' : 'draft') + '">' + (isPublished ? 'Publicada' : 'Borrador') + '</span>';
+    var mx='';if(pp.length>1)mx+='<span class="post-card-photos-count"><i class="fas fa-images"></i> '+pp.length+'</span>';
 
-    if (ytId) badges += ' <span class="status-badge" style="background:rgba(255,0,0,0.12);color:#ff4444;"><i class="fab fa-youtube" style="margin-right:3px;"></i>Video</span>';
-    if (hasLink) badges += ' <span class="status-badge" style="background:rgba(26,115,232,0.12);color:#1a73e8;"><i class="fas fa-external-link-alt" style="margin-right:3px;"></i>Enlace</span>';
-
-    var metaExtra = '';
-    if (postPhotos.length > 1) metaExtra += '<span class="post-card-photos-count"><i class="fas fa-images"></i> ' + postPhotos.length + '</span>';
-
-    return '<article class="post-card" style="animation-delay:' + (index * 0.06) + 's" onclick="viewPost(\'' + post.id + '\')">' +
-      cardImg +
-      '<div class="post-card-body">' +
-        '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">' + badges + '</div>' +
-        '<h3 class="post-card-title">' + escapeHtml(post.titulo) + '</h3>' +
-        (post.descripcion ? '<p class="post-card-desc">' + escapeHtml(post.descripcion) + '</p>' : '') +
-      '</div>' +
-      '<div class="post-card-footer">' +
-        '<div style="display:flex;align-items:center;gap:12px;">' +
-          '<span class="post-card-date"><i class="far fa-clock" style="margin-right:4px;"></i>' + date + '</span>' +
-          metaExtra +
-        '</div>' +
-        '<div class="post-card-actions">' +
-          '<button class="post-action-btn edit" onclick="event.stopPropagation();editPost(\'' + post.id + '\')" aria-label="Editar"><i class="fas fa-pen"></i></button>' +
-          '<button class="post-action-btn delete" onclick="event.stopPropagation();confirmDeletePost(\'' + post.id + '\')" aria-label="Eliminar"><i class="fas fa-trash"></i></button>' +
-        '</div>' +
-      '</div>' +
-    '</article>';
+    return '<article class="post-card" style="animation-delay:'+(idx*0.06)+'s" onclick="viewPost(\''+post.id+'\')">'+cardImg+
+      '<div class="post-card-body"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">'+badges+'</div>'+
+      '<h3 class="post-card-title">'+escapeHtml(post.titulo)+'</h3>'+
+      (post.descripcion?'<p class="post-card-desc">'+escapeHtml(post.descripcion)+'</p>':'')+
+      '</div><div class="post-card-footer"><div style="display:flex;align-items:center;gap:12px;">'+
+      '<span class="post-card-date"><i class="far fa-clock" style="margin-right:4px;"></i>'+dt+'</span>'+mx+
+      '</div><div class="post-card-actions">'+
+      '<button class="post-action-btn edit" onclick="event.stopPropagation();editPost(\''+post.id+'\')" aria-label="Editar"><i class="fas fa-pen"></i></button>'+
+      '<button class="post-action-btn delete" onclick="event.stopPropagation();confirmDeletePost(\''+post.id+'\')" aria-label="Eliminar"><i class="fas fa-trash"></i></button>'+
+      '</div></div></article>';
   }).join('');
 }
 
 // ===================================================================
-// VER DETALLE
+// VIEW POST
 // ===================================================================
-function viewPost(id) {
-  var post = posts.find(function(p) { return p.id === id; });
-  if (!post) return;
+function viewPost(id){
+  var post=posts.find(function(p){return p.id===id;});if(!post)return;
+  var pg=findPage(post.paginaId),pn=pg?pg.name:'Sin pagina',dt=formatDate(post.fechaCreacion);
+  var pp=post.fotos||[],ip=post.publicado===true,ytId=getYoutubeId(post.url),hl=post.url&&!ytId;
+  var pv=post.videos||[],pdfs=post.pdfs||[];
 
-  var page = findPage(post.paginaId);
-  var pageName = page ? page.name : 'Sin pagina';
-  var date = formatDate(post.fechaCreacion);
-  var postPhotos = post.fotos || [];
-  var isPublished = post.publicado === true;
-  var ytId = getYoutubeId(post.url);
-  var hasLink = post.url && !ytId;
+  var hero='';
+  if(ytId){hero+='<div style="position:relative;padding-bottom:56.25%;height:0;background:#000;border-radius:12px 12px 0 0;overflow:hidden;"><iframe src="https://www.youtube.com/embed/'+ytId+'" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe></div>';}
+  else if(pv.length>0){hero+='<div style="border-radius:12px 12px 0 0;overflow:hidden;"><iframe src="'+pv[0]+'" style="width:100%;height:300px;border:none;" allowfullscreen></iframe></div>';}
+  else if(pp.length>0){hero+='<div class="detail-hero"><img src="'+pp[0]+'" alt="'+escapeHtml(post.titulo)+'"><div class="detail-hero-overlay"></div></div>';}
 
-  var heroHtml = '';
+  var gallery='';
+  if(pp.length>0){var si=(ytId||pv.length>0)?0:1;if(pp.length>si){gallery='<div class="detail-gallery">'+pp.slice(si).map(function(p){return '<img src="'+p+'" alt="Foto" onclick="openLightbox(\''+p.replace(/'/g,"\\'")+'\')" loading="lazy">';}).join('')+'</div>';}}
 
-  // Video de YouTube embebido
-  if (ytId) {
-    heroHtml += '<div style="position:relative;padding-bottom:56.25%;height:0;background:#000;border-radius:12px 12px 0 0;overflow:hidden;">' +
-      '<iframe src="https://www.youtube.com/embed/' + ytId + '" style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;" allowfullscreen></iframe></div>';
-  }
-  // Primera foto si no hay video
-  else if (postPhotos.length > 0) {
-    heroHtml += '<div class="detail-hero"><img src="' + postPhotos[0] + '" alt="' + escapeHtml(post.titulo) + '"><div class="detail-hero-overlay"></div></div>';
-  }
+  var moreVideos='';
+  if(pv.length>(ytId?0:1)){var vs=ytId?0:1;moreVideos=pv.slice(vs).map(function(v){return '<div style="margin-top:12px;border-radius:10px;overflow:hidden;"><iframe src="'+v+'" style="width:100%;height:250px;border:none;" allowfullscreen></iframe></div>';}).join('');}
 
-  // Galería de fotos adicionales
-  var galleryHtml = '';
-  if (postPhotos.length > 0) {
-    var startIdx = ytId ? 0 : 1; // Si hay video, mostrar todas; si no, omitir la primera (ya en hero)
-    if (postPhotos.length > startIdx) {
-      var galleryImgs = postPhotos.slice(startIdx).map(function(p) {
-        return '<img src="' + p + '" alt="Foto" onclick="openLightbox(\'' + p.replace(/'/g, "\\'") + '\')" loading="lazy">';
-      }).join('');
-      galleryHtml = '<div class="detail-gallery">' + galleryImgs + '</div>';
-    }
-  }
+  var pdfHtml='';
+  if(pdfs.length>0){pdfHtml=pdfs.map(function(p,i){return '<a href="'+p+'" target="_blank" rel="noopener" class="btn btn-secondary" style="width:100%;margin-bottom:8px;text-decoration:none;"><i class="fas fa-file-pdf" style="color:#e74c3c;"></i> Documento '+(i+1)+'</a>';}).join('');}
 
-  // Botón de enlace externo
-  var linkHtml = '';
-  if (hasLink) {
-    var domain = '';
-    try { domain = new URL(post.url).hostname.replace('www.', ''); } catch(e) { domain = post.url; }
-    linkHtml = '<a href="' + post.url + '" target="_blank" rel="noopener" class="btn btn-secondary" style="width:100%;margin-bottom:16px;text-decoration:none;">' +
-      '<i class="fas fa-external-link-alt"></i> Abrir ' + domain + '</a>';
-  }
+  var linkHtml='';
+  if(hl){var dom='';try{dom=new URL(post.url).hostname.replace('www.','');}catch(e){dom=post.url;}linkHtml='<a href="'+post.url+'" target="_blank" rel="noopener" class="btn btn-secondary" style="width:100%;margin-bottom:16px;text-decoration:none;"><i class="fas fa-external-link-alt"></i> Abrir '+dom+'</a>';}
 
-  document.getElementById('detailContent').innerHTML =
-    heroHtml +
-    '<div style="padding:' + (ytId ? '20px' : '0') + ' 0 0;">' +
-      '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">' +
-        '<span class="post-card-page">' + pageName + '</span>' +
-        '<span class="status-badge ' + (isPublished ? 'published' : 'draft') + '">' + (isPublished ? 'Publicada' : 'Borrador') + '</span>' +
-      '</div>' +
-      '<h2 class="detail-title">' + escapeHtml(post.titulo) + '</h2>' +
-      '<div class="detail-meta">' +
-        '<span class="detail-meta-item"><i class="far fa-calendar"></i> ' + date + '</span>' +
-        (postPhotos.length > 0 ? '<span class="detail-meta-item"><i class="fas fa-camera"></i> ' + postPhotos.length + ' foto' + (postPhotos.length !== 1 ? 's' : '') + '</span>' : '') +
-      '</div>' +
-      linkHtml +
-      (post.descripcion ? '<p class="detail-desc">' + escapeHtml(post.descripcion) + '</p>' : '') +
-      galleryHtml +
-      '<div style="display:flex;gap:10px;margin-top:24px;">' +
-        '<button class="btn btn-secondary" style="flex:1;" onclick="editPost(\'' + id + '\')"><i class="fas fa-pen"></i> Editar</button>' +
-        '<button class="btn btn-danger" style="flex:1;" onclick="confirmDeletePost(\'' + id + '\')"><i class="fas fa-trash"></i> Eliminar</button>' +
-      '</div>' +
-    '</div>';
-
+  document.getElementById('detailContent').innerHTML=hero+
+    '<div style="padding:20px 0 0;">'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">'+
+      '<span class="post-card-page">'+pn+'</span>'+
+      '<span class="status-badge '+(ip?'published':'draft')+'">'+(ip?'Publicada':'Borrador')+'</span>'+
+    '</div>'+
+    '<h2 class="detail-title">'+escapeHtml(post.titulo)+'</h2>'+
+    '<div class="detail-meta">'+
+      '<span class="detail-meta-item"><i class="far fa-calendar"></i> '+dt+'</span>'+
+      (pp.length>0?'<span class="detail-meta-item"><i class="fas fa-camera"></i> '+pp.length+'</span>':'')+
+      (pv.length>0?'<span class="detail-meta-item"><i class="fas fa-video"></i> '+pv.length+'</span>':'')+
+      (pdfs.length>0?'<span class="detail-meta-item"><i class="fas fa-file-pdf"></i> '+pdfs.length+'</span>':'')+
+    '</div>'+
+    linkHtml+pdfHtml+
+    (post.descripcion?'<p class="detail-desc">'+escapeHtml(post.descripcion)+'</p>':'')+
+    gallery+moreVideos+
+    '<div style="display:flex;gap:10px;margin-top:24px;">'+
+      '<button class="btn btn-secondary" style="flex:1;" onclick="editPost(\''+id+'\')"><i class="fas fa-pen"></i> Editar</button>'+
+      '<button class="btn btn-danger" style="flex:1;" onclick="confirmDeletePost(\''+id+'\')"><i class="fas fa-trash"></i> Eliminar</button>'+
+    '</div></div>';
   navigateTo('detail');
 }
 
 // ===================================================================
 // FOTOS
 // ===================================================================
-function handleFiles(files) {
-  for (var i = 0; i < files.length && selectedPhotos.length < 10; i++) {
-    var file = files[i];
-    if (!file.type.startsWith('image/')) continue;
-    var reader = new FileReader();
-    reader.onload = (function() {
-      return function(e) {
-        compressImage(e.target.result, 1200, 0.8, function(compressed) {
-          selectedPhotos.push({ file: file.name, dataUrl: compressed });
-          renderPhotoPreview();
-        });
-      };
-    })();
+function handleFiles(files){
+  for(var i=0;i<files.length&&selectedPhotos.length<10;i++){
+    var file=files[i];if(!file.type.startsWith('image/'))continue;
+    var reader=new FileReader();
+    reader.onload=(function(){return function(e){compressImage(e.target.result,1200,0.8,function(comp){selectedPhotos.push({file:file.name,dataUrl:comp});renderPhotoPreview();});};})();
     reader.readAsDataURL(file);
   }
-  if (selectedPhotos.length >= 10) showToast('Maximo 10 fotos', 'info');
-  document.getElementById('fileInput').value = '';
+  if(selectedPhotos.length>=10)showToast('Maximo 10 fotos','info');
+  document.getElementById('fileInput').value='';
 }
+function compressImage(d,mw,q,cb){var img=new Image();img.onload=function(){var c=document.createElement('canvas'),w=img.width,h=img.height;if(w>mw){h=Math.round(h*(mw/w));w=mw;}c.width=Math.max(1,w);c.height=Math.max(1,h);c.getContext('2d').drawImage(img,0,0,c.width,c.height);cb(c.toDataURL('image/jpeg',q));};img.src=d;}
+function renderPhotoPreview(){document.getElementById('photoPreviewGrid').innerHTML=selectedPhotos.map(function(p,i){return '<div class="photo-preview-item"><img src="'+p.dataUrl+'" alt="Preview"><button class="photo-remove-btn" onclick="removePhoto('+i+')"><i class="fas fa-times"></i></button></div>';}).join('');}
+function removePhoto(i){selectedPhotos.splice(i,1);renderPhotoPreview();}
 
-function compressImage(dataUrl, maxWidth, quality, callback) {
-  var img = new Image();
-  img.onload = function() {
-    var canvas = document.createElement('canvas');
-    var w = img.width, h = img.height;
-    if (w > maxWidth) { h = Math.round(h * (maxWidth / w)); w = maxWidth; }
-    canvas.width = Math.max(1, w); canvas.height = Math.max(1, h);
-    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-    callback(canvas.toDataURL('image/jpeg', quality));
-  };
-  img.src = dataUrl;
+var dz=document.getElementById('dropZone');
+dz.addEventListener('dragover',function(e){e.preventDefault();dz.classList.add('drag-over');});
+dz.addEventListener('dragleave',function(){dz.classList.remove('drag-over');});
+dz.addEventListener('drop',function(e){e.preventDefault();dz.classList.remove('drag-over');handleFiles(e.dataTransfer.files);});
+
+// ===================================================================
+// VIDEOS
+// ===================================================================
+function handleVideoFiles(files){
+  for(var i=0;i<files.length&&selectedVideos.length<3;i++){
+    var file=files[i];if(!file.type.startsWith('video/'))continue;
+    if(file.size>15*1024*1024){showToast('El video "'+file.name+'" pesa mas de 15MB. Reducelo.','error');continue;}
+    var reader=new FileReader();
+    reader.onload=(function(f){return function(e){selectedVideos.push({file:f.name,dataUrl:e.target.result,type:f.type,size:f.size});renderVideoPreview();};})(file);
+    reader.readAsDataURL(file);
+  }
+  if(selectedVideos.length>=3)showToast('Maximo 3 videos','info');
+  document.getElementById('videoInput').value='';
 }
-
-function renderPhotoPreview() {
-  var grid = document.getElementById('photoPreviewGrid');
-  grid.innerHTML = selectedPhotos.map(function(photo, i) {
-    return '<div class="photo-preview-item"><img src="' + photo.dataUrl + '" alt="Preview ' + (i + 1) + '">' +
-      '<button class="photo-remove-btn" onclick="removePhoto(' + i + ')" aria-label="Quitar foto"><i class="fas fa-times"></i></button></div>';
+function renderVideoPreview(){
+  document.getElementById('videoPreviewGrid').innerHTML=selectedVideos.map(function(v,i){
+    var sizeMB=(v.size/(1024*1024)).toFixed(1);
+    return '<div class="photo-preview-item" style="background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;flex-direction:column;">'+
+      '<i class="fas fa-video" style="font-size:24px;color:var(--accent);margin-bottom:4px;"></i>'+
+      '<span style="font-size:9px;color:var(--fg-dim);">'+sizeMB+' MB</span>'+
+      '<button class="photo-remove-btn" onclick="removeVideo('+i+')"><i class="fas fa-times"></i></button></div>';
   }).join('');
 }
-
-function removePhoto(index) { selectedPhotos.splice(index, 1); renderPhotoPreview(); }
-
-var dropZone = document.getElementById('dropZone');
-dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
-dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('drag-over'); });
-dropZone.addEventListener('drop', function(e) { e.preventDefault(); dropZone.classList.remove('drag-over'); handleFiles(e.dataTransfer.files); });
+function removeVideo(i){selectedVideos.splice(i,1);renderVideoPreview();}
 
 // ===================================================================
-// GUARDAR PUBLICACIÓN
+// PDFS
 // ===================================================================
-async function savePost() {
-  var title = document.getElementById('postTitle').value.trim();
-  var pageId = document.getElementById('postPage').value;
-  var description = document.getElementById('postDesc').value.trim();
-  var url = document.getElementById('postUrl').value.trim();
-  var published = document.getElementById('postPublished').checked;
-
-  if (!title) { showToast('Escribe un encabezado', 'error'); document.getElementById('postTitle').focus(); return; }
-  if (!pageId) { showToast('Selecciona una pagina destino', 'error'); return; }
-
-  var btn = document.getElementById('saveBtn');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Subiendo fotos...';
-
-  try {
-    var photoUrls = [];
-
-    // Si editamos y no cambiamos fotos, mantener existentes
-    if (editingPostId) {
-      var existingPost = posts.find(function(p) { return p.id === editingPostId; });
-      if (existingPost && selectedPhotos.length === 0) {
-        photoUrls = existingPost.fotos || [];
-      }
-    }
-
-    for (var i = 0; i < selectedPhotos.length; i++) {
-      if (selectedPhotos[i].dataUrl.indexOf('drive.google.com') !== -1 || selectedPhotos[i].dataUrl.indexOf('youtube.com') !== -1) {
-        photoUrls.push(selectedPhotos[i].dataUrl);
-        continue;
-      }
-
-      btn.innerHTML = '<span class="spinner"></span> Foto ' + (i + 1) + '/' + selectedPhotos.length + '...';
-
-      var formData = new URLSearchParams();
-      formData.append('action', 'uploadPhoto');
-      formData.append('image', selectedPhotos[i].dataUrl);
-
-      var res = await fetch(API_URL, { method: 'POST', body: formData, redirect: 'follow' });
-      var result = await res.json();
-      if (result.url) { photoUrls.push(result.url); }
-      else { showToast('Error al subir foto ' + (i + 1), 'error'); }
-    }
-
-    btn.innerHTML = '<span class="spinner"></span> Guardando...';
-
-    var postData = { titulo: title, paginaId: pageId, descripcion: description, url: url, publicado: published, fotos: photoUrls };
-    var formData2 = new URLSearchParams();
-
-    if (editingPostId) {
-      postData.id = editingPostId;
-      formData2.append('action', 'update');
-    } else {
-      formData2.append('action', 'create');
-    }
-    formData2.append('data', JSON.stringify(postData));
-
-    var res2 = await fetch(API_URL, { method: 'POST', body: formData2, redirect: 'follow' });
-    var result2 = await res2.json();
-
-    if (result2.success) {
-      showToast(editingPostId ? 'Publicacion actualizada' : 'Publicacion creada');
-      resetForm();
-      await loadPosts();
-      navigateTo('home');
-    } else {
-      showToast('Error: ' + (result2.error || 'desconocido'), 'error');
-    }
-  } catch (error) {
-    console.error(error);
-    showToast('Error de conexion', 'error');
+function handlePdfFiles(files){
+  for(var i=0;i<files.length&&selectedPdfs.length<5;i++){
+    var file=files[i];if(file.type!=='application/pdf')continue;
+    if(file.size>10*1024*1024){showToast('El PDF "'+file.name+'" pesa mas de 10MB.','error');continue;}
+    var reader=new FileReader();
+    reader.onload=(function(f){return function(e){selectedPdfs.push({file:f.name,dataUrl:e.target.result,type:f.type,size:f.size});renderPdfPreview();};})(file);
+    reader.readAsDataURL(file);
   }
+  if(selectedPdfs.length>=5)showToast('Maximo 5 PDFs','info');
+  document.getElementById('pdfInput').value='';
+}
+function renderPdfPreview(){
+  document.getElementById('pdfPreviewList').innerHTML=selectedPdfs.map(function(p,i){
+    var sizeMB=(p.size/(1024*1024)).toFixed(1);
+    return '<div style="display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--bg-elevated);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;">'+
+      '<i class="fas fa-file-pdf" style="color:#e74c3c;font-size:20px;flex-shrink:0;"></i>'+
+      '<div style="flex:1;min-width:0;"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+p.file+'</div>'+
+      '<div style="font-size:11px;color:var(--fg-dim);">'+sizeMB+' MB</div></div>'+
+      '<button onclick="removePdf('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer;padding:4px;"><i class="fas fa-times"></i></button></div>';
+  }).join('');
+}
+function removePdf(i){selectedPdfs.splice(i,1);renderPdfPreview();}
 
-  btn.disabled = false;
-  btn.innerHTML = '<i class="fas fa-paper-plane"></i> Publicar';
+// ===================================================================
+// GUARDAR PUBLICACION
+// ===================================================================
+async function savePost(){
+  var title=document.getElementById('postTitle').value.trim();
+  var pageId=document.getElementById('postPage').value;
+  var desc=document.getElementById('postDesc').value.trim();
+  var url=document.getElementById('postUrl').value.trim();
+  var pub=document.getElementById('postPublished').checked;
+
+  if(!title){showToast('Escribe un encabezado','error');document.getElementById('postTitle').focus();return;}
+  if(!pageId){showToast('Selecciona una pagina','error');return;}
+
+  var btn=document.getElementById('saveBtn');btn.disabled=true;
+  btn.innerHTML='<span class="spinner"></span> Subiendo...';
+
+  try{
+    // Subir fotos
+    var photoUrls=[];
+    if(editingPostId){var ep=posts.find(function(p){return p.id===editingPostId;});if(ep&&selectedPhotos.length===0)photoUrls=ep.fotos||[];}
+    for(var i=0;i<selectedPhotos.length;i++){
+      if(selectedPhotos[i].dataUrl.indexOf('drive.google.com')!==-1){photoUrls.push(selectedPhotos[i].dataUrl);continue;}
+      btn.innerHTML='<span class="spinner"></span> Foto '+(i+1)+'/'+selectedPhotos.length+'...';
+      var fd1=new URLSearchParams();fd1.append('action','uploadPhoto');fd1.append('image',selectedPhotos[i].dataUrl);
+      var r1=await fetch(API_URL,{method:'POST',body:fd1,redirect:'follow'});var j1=await r1.json();
+      if(j1.url)photoUrls.push(j1.url);else showToast('Error foto '+(i+1),'error');
+    }
+
+    // Subir videos
+    var videoUrls=[];
+    if(editingPostId){var ep2=posts.find(function(p){return p.id===editingPostId;});if(ep2&&selectedVideos.length===0)videoUrls=ep2.videos||[];}
+    for(var v=0;v<selectedVideos.length;v++){
+      if(selectedVideos[v].dataUrl.indexOf('drive.google.com')!==-1){videoUrls.push(selectedVideos[v].dataUrl);continue;}
+      btn.innerHTML='<span class="spinner"></span> Video '+(v+1)+'/'+selectedVideos.length+'...';
+      var fd2=new URLSearchParams();fd2.append('action','uploadFile');fd2.append('filedata',selectedVideos[v].dataUrl);
+      var r2=await fetch(API_URL,{method:'POST',body:fd2,redirect:'follow'});var j2=await r2.json();
+      if(j2.url)videoUrls.push(j2.url);else showToast('Error video '+(v+1),'error');
+    }
+
+    // Subir PDFs
+    var pdfUrls=[];
+    if(editingPostId){var ep3=posts.find(function(p){return p.id===editingPostId;});if(ep3&&selectedPdfs.length===0)pdfUrls=ep3.pdfs||[];}
+    for(var p=0;p<selectedPdfs.length;p++){
+      if(selectedPdfs[p].dataUrl.indexOf('drive.google.com')!==-1){pdfUrls.push(selectedPdfs[p].dataUrl);continue;}
+      btn.innerHTML='<span class="spinner"></span> PDF '+(p+1)+'/'+selectedPdfs.length+'...';
+      var fd3=new URLSearchParams();fd3.append('action','uploadFile');fd3.append('filedata',selectedPdfs[p].dataUrl);
+      var r3=await fetch(API_URL,{method:'POST',body:fd3,redirect:'follow'});var j3=await r3.json();
+      if(j3.url)pdfUrls.push(j3.url);else showToast('Error PDF '+(p+1),'error');
+    }
+
+    btn.innerHTML='<span class="spinner"></span> Guardando...';
+    var postData={titulo:title,paginaId:pageId,descripcion:desc,url:url,publicado:pub,fotos:photoUrls,videos:videoUrls,pdfs:pdfUrls};
+    var fd4=new URLSearchParams();
+    if(editingPostId){postData.id=editingPostId;fd4.append('action','update');}else{fd4.append('action','create');}
+    fd4.append('data',JSON.stringify(postData));
+    var r4=await fetch(API_URL,{method:'POST',body:fd4,redirect:'follow'});var j4=await r4.json();
+    if(j4.success){
+      showToast(editingPostId?'Publicacion actualizada':'Publicacion creada');
+      // Enviar notificacion si esta activado
+      var sendNotif=document.getElementById('sendNotification').checked;
+      if(sendNotif&&pub){
+        try{
+          var fn=new URLSearchParams();fn.append('action','sendNotification');fn.append('title',title);
+          var pg=findPage(pageId);fn.append('body','Nueva publicacion en '+(pg?pg.name:'el sitio'));
+          await fetch(API_URL,{method:'POST',body:fn,redirect:'follow'});
+        }catch(e){}
+      }
+      resetForm();await loadPosts();navigateTo('home');
+    }    
+    else{showToast('Error: '+(j4.error||'desconocido'),'error');}
+  }catch(e){console.error(e);showToast('Error de conexion','error');}
+  btn.disabled=false;btn.innerHTML='<i class="fas fa-paper-plane"></i> Publicar';
 }
 
 // ===================================================================
 // EDITAR
 // ===================================================================
-function editPost(id) {
-  var post = posts.find(function(p) { return p.id === id; });
-  if (!post) return;
-  editingPostId = id;
-  document.getElementById('postTitle').value = post.titulo || '';
-  document.getElementById('postPage').value = post.paginaId || '';
-  document.getElementById('postDesc').value = post.descripcion || '';
-  document.getElementById('postUrl').value = post.url || '';
-  document.getElementById('postPublished').checked = post.publicado === true;
-  selectedPhotos = (post.fotos || []).map(function(u) { return { file: 'existente', dataUrl: u }; });
-  renderPhotoPreview();
+function editPost(id){
+  var post=posts.find(function(p){return p.id===id;});if(!post)return;
+  editingPostId=id;
+  document.getElementById('postTitle').value=post.titulo||'';
+  document.getElementById('postPage').value=post.paginaId||'';
+  document.getElementById('postDesc').value=post.descripcion||'';
+  document.getElementById('postUrl').value=post.url||'';
+  document.getElementById('postPublished').checked=post.publicado===true;
+
+  selectedPhotos=(post.fotos||[]).map(function(u){return{file:'existente',dataUrl:u};});renderPhotoPreview();
+  selectedVideos=(post.videos||[]).map(function(u){return{file:'existente',dataUrl:u,type:'video/mp4',size:0};});renderVideoPreview();
+  selectedPdfs=(post.pdfs||[]).map(function(u){return{file:'Documento',dataUrl:u,type:'application/pdf',size:0};});renderPdfPreview();
+
   navigateTo('create');
-  document.getElementById('saveBtn').innerHTML = '<i class="fas fa-save"></i> Guardar Cambios';
+  document.getElementById('saveBtn').innerHTML='<i class="fas fa-save"></i> Guardar Cambios';
 }
 
 // ===================================================================
 // ELIMINAR
 // ===================================================================
-function confirmDeletePost(id) {
-  var post = posts.find(function(p) { return p.id === id; });
-  if (!post) return;
-  showModal('<h3 class="modal-title">Eliminar publicacion</h3><p class="modal-text">Vas a eliminar <strong>"' + escapeHtml(post.titulo) + '"</strong>. No se puede deshacer.</p><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-danger" onclick="deletePost(\'' + id + '\')">Eliminar</button></div>');
-}
-
-async function deletePost(id) {
-  try {
-    var formData = new URLSearchParams();
-    formData.append('action', 'delete');
-    formData.append('id', id);
-    var res = await fetch(API_URL, { method: 'POST', body: formData, redirect: 'follow' });
-    var result = await res.json();
-    if (result.success) {
-      posts = posts.filter(function(p) { return p.id !== id; });
-      closeModal();
-      showToast('Publicacion eliminada');
-      updateStats();
-      renderPosts();
-      if (document.getElementById('screenDetail').classList.contains('active')) navigateTo('home');
-    } else { showToast('Error al eliminar', 'error'); }
-  } catch (error) { showToast('Error de conexion', 'error'); }
-}
+function confirmDeletePost(id){var p=posts.find(function(x){return x.id===id;});if(!p)return;showModal('<h3 class="modal-title">Eliminar publicacion</h3><p class="modal-text">Vas a eliminar <strong>"'+escapeHtml(p.titulo)+'"</strong>.</p><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-danger" onclick="deletePost(\''+id+'\')">Eliminar</button></div>');}
+async function deletePost(id){try{var fd=new URLSearchParams();fd.append('action','delete');fd.append('id',id);var r=await fetch(API_URL,{method:'POST',body:fd,redirect:'follow'});var j=await r.json();if(j.success){posts=posts.filter(function(p){return p.id!==id;});closeModal();showToast('Eliminada');updateStats();renderPosts();if(document.getElementById('screenDetail').classList.contains('active'))navigateTo('home');}else{showToast('Error','error');}}catch(e){showToast('Error de conexion','error');}}
 
 // ===================================================================
-// CARGAR DESDE GOOGLE SHEET
+// CARGAR
 // ===================================================================
-async function loadPosts() {
-  try {
-    var formData = new URLSearchParams();
-    formData.append('action', 'list');
-    var res = await fetch(API_URL, { method: 'POST', body: formData, redirect: 'follow' });
-    posts = await res.json();
-    updateStats();
-    renderPosts();
-  } catch (error) {
-    console.error('Error cargando posts:', error);
-    showToast('Error al cargar publicaciones', 'error');
-  }
-}
+async function loadPosts(){try{var fd=new URLSearchParams();fd.append('action','list');var r=await fetch(API_URL,{method:'POST',body:fd,redirect:'follow'});posts=await r.json();updateStats();renderPosts();}catch(e){console.error(e);showToast('Error al cargar','error');}}
 
 // ===================================================================
-// PÁGINAS
+// PAGINAS
 // ===================================================================
-function renderPages() {
-  var container = document.getElementById('pagesList');
-  container.innerHTML = SITE_PAGES.map(function(page) {
-    var postCount = posts.filter(function(p) { return p.paginaId === page.id; }).length;
-    var subpagesHtml = '';
-    if (page.subpages.length > 0) {
-      subpagesHtml = '<div class="subpage-list">' + page.subpages.map(function(sub) {
-        var subCount = posts.filter(function(p) { return p.paginaId === sub.id; }).length;
-        return '<div class="subpage-item" onclick="filterByPage(\'' + sub.id + '\')"><span style="flex:1;">' + sub.name + '</span><span style="font-size:11px;color:var(--fg-dim);">' + subCount + ' pub.</span></div>';
-      }).join('') + '</div>';
-    }
-    return '<div class="page-item" onclick="filterByPage(\'' + page.id + '\')"><div class="page-item-icon" style="background:' + page.color + '22;color:' + page.color + ';"><i class="' + page.icon + '"></i></div><div class="page-item-info"><div class="page-item-name">' + page.name + '</div><div class="page-item-count">' + postCount + ' publicacion' + (postCount !== 1 ? 'es' : '') + (page.subpages.length > 0 ? ' · ' + page.subpages.length + ' subpagina' + (page.subpages.length > 1 ? 's' : '') : '') + '</div></div><i class="fas fa-chevron-right page-item-chevron"></i></div>' + subpagesHtml;
-  }).join('');
-}
-
-function filterByPage(pageId) { currentFilter = pageId; navigateTo('home'); }
+function renderPages(){var c=document.getElementById('pagesList');c.innerHTML=SITE_PAGES.map(function(pg){var pc=posts.filter(function(p){return p.paginaId===pg.id;}).length;var sp='';if(pg.subpages.length>0){sp='<div class="subpage-list">'+pg.subpages.map(function(s){var sc=posts.filter(function(p){return p.paginaId===s.id;}).length;return '<div class="subpage-item" onclick="filterByPage(\''+s.id+'\')"><span style="flex:1;">'+s.name+'</span><span style="font-size:11px;color:var(--fg-dim);">'+sc+' pub.</span></div>';}).join('')+'</div>';}return '<div class="page-item" onclick="filterByPage(\''+pg.id+'\')"><div class="page-item-icon" style="background:'+pg.color+'22;color:'+pg.color+';"><i class="'+pg.icon+'"></i></div><div class="page-item-info"><div class="page-item-name">'+pg.name+'</div><div class="page-item-count">'+pc+' publicacion'+(pc!==1?'es':'')+(pg.subpages.length>0?' · '+pg.subpages.length+' subpagina'+(pg.subpages.length>1?'s':''):'')+'</div></div><i class="fas fa-chevron-right page-item-chevron"></i></div>'+sp;}).join('');}
+function filterByPage(pid){currentFilter=pid;navigateTo('home');}
 
 // ===================================================================
-// FORMULARIO
+// FORM
 // ===================================================================
-function resetForm() {
-  document.getElementById('postTitle').value = '';
-  document.getElementById('postDesc').value = '';
-  document.getElementById('postUrl').value = '';
-  document.getElementById('postPublished').checked = true;
-  selectedPhotos = [];
-  editingPostId = null;
-  renderPhotoPreview();
-  var btn = document.getElementById('saveBtn');
-  btn.innerHTML = '<i class="fas fa-paper-plane"></i> Publicar';
-  btn.disabled = false;
-}
-
-function populatePageSelect() {
-  var select = document.getElementById('postPage');
-  var html = '<option value="">Selecciona una pagina...</option>';
-  SITE_PAGES.forEach(function(page) {
-    html += '<option value="' + page.id + '">' + page.name + '</option>';
-    page.subpages.forEach(function(sub) {
-      html += '<option value="' + sub.id + '">&nbsp;&nbsp;&nbsp;└ ' + sub.name + '</option>';
-    });
-  });
-  select.innerHTML = html;
-}
+function resetForm(){document.getElementById('postTitle').value='';document.getElementById('postDesc').value='';document.getElementById('postUrl').value='';document.getElementById('postPublished').checked=true;selectedPhotos=[];selectedVideos=[];selectedPdfs=[];editingPostId=null;renderPhotoPreview();renderVideoPreview();renderPdfPreview();var btn=document.getElementById('saveBtn');btn.innerHTML='<i class="fas fa-paper-plane"></i> Publicar';btn.disabled=false;}
+function populatePageSelect(){var s=document.getElementById('postPage');var h='<option value="">Selecciona una pagina...</option>';SITE_PAGES.forEach(function(pg){h+='<option value="'+pg.id+'">'+pg.name+'</option>';pg.subpages.forEach(function(sp){h+='<option value="'+sp.id+'">&nbsp;&nbsp;&nbsp;└ '+sp.name+'</option>';});});s.innerHTML=h;}
 
 // ===================================================================
-// UTILIDADES
+// UTILS
 // ===================================================================
-function findPage(pageId) {
-  for (var i = 0; i < SITE_PAGES.length; i++) {
-    if (SITE_PAGES[i].id === pageId) return SITE_PAGES[i];
-    for (var j = 0; j < SITE_PAGES[i].subpages.length; j++) {
-      if (SITE_PAGES[i].subpages[j].id === pageId) return { name: SITE_PAGES[i].subpages[j].name, color: SITE_PAGES[i].color, icon: SITE_PAGES[i].icon };
-    }
-  }
-  return null;
-}
+function findPage(pid){for(var i=0;i<SITE_PAGES.length;i++){if(SITE_PAGES[i].id===pid)return SITE_PAGES[i];for(var j=0;j<SITE_PAGES[i].subpages.length;j++){if(SITE_PAGES[i].subpages[j].id===pid)return{name:SITE_PAGES[i].subpages[j].name,color:SITE_PAGES[i].color,icon:SITE_PAGES[i].icon};}}return null;}
+function formatDate(iso){if(!iso)return '';var d=new Date(iso),n=new Date(),df=n-d;if(df<60000)return 'Ahora';if(df<3600000)return 'Hace '+Math.floor(df/60000)+' min';if(df<86400000)return 'Hace '+Math.floor(df/3600000)+'h';if(df<604800000)return 'Hace '+Math.floor(df/86400000)+'d';return d.toLocaleDateString('es-ES',{day:'numeric',month:'short',year:'numeric'});}
+function escapeHtml(t){if(!t)return '';var d=document.createElement('div');d.textContent=t;return d.innerHTML;}
 
-function formatDate(isoString) {
-  if (!isoString) return '';
-  var d = new Date(isoString), now = new Date(), diff = now - d;
-  if (diff < 60000) return 'Ahora mismo';
-  if (diff < 3600000) return 'Hace ' + Math.floor(diff / 60000) + ' min';
-  if (diff < 86400000) return 'Hace ' + Math.floor(diff / 3600000) + 'h';
-  if (diff < 604800000) return 'Hace ' + Math.floor(diff / 86400000) + 'd';
-  return d.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
-}
+function exportData(){if(posts.length===0){showToast('No hay datos','info');return;}var b=new Blob([JSON.stringify({total:posts.length,posts:posts},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='sitemanager_'+Date.now()+'.json';a.click();showToast('Exportado');}
+function confirmClearAll(){showModal('<h3 class="modal-title">Borrar todo</h3><p class="modal-text">Se eliminan todas ('+posts.length+').</p><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-danger" onclick="clearAll()">Borrar</button></div>');}
+async function clearAll(){try{for(var i=0;i<posts.length;i++){var fd=new URLSearchParams();fd.append('action','delete');fd.append('id',posts[i].id);await fetch(API_URL,{method:'POST',body:fd,redirect:'follow'});}posts=[];closeModal();showToast('Eliminado');updateStats();renderPosts();}catch(e){showToast('Error','error');}}
 
-function escapeHtml(text) { if (!text) return ''; var div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
+function showFirebaseGuide(){showModal('<h3 class="modal-title">Como funciona</h3><div class="modal-text"><p><strong style="color:var(--accent);">Tu app administra tu Google Site:</strong></p><p style="margin-top:8px;">1. Creas publicaciones con fotos, videos, PDFs o enlaces</p><p>2. Se guardan en tu Google Sheet</p><p>3. Los archivos se guardan en tu Google Drive</p><p>4. Tu Google Site las muestra automaticamente</p></div><div class="modal-actions"><button class="btn btn-primary" onclick="closeModal()">Entendido</button></div>');}
 
 // ===================================================================
-// EXPORTAR / BORRAR
+// INIT
 // ===================================================================
-function exportData() {
-  if (posts.length === 0) { showToast('No hay publicaciones', 'info'); return; }
-  var blob = new Blob([JSON.stringify({ exportedAt: new Date().toISOString(), total: posts.length, posts: posts }, null, 2)], { type: 'application/json' });
-  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'sitemanager_' + Date.now() + '.json'; a.click();
-  showToast('Datos exportados');
-}
-
-function confirmClearAll() {
-  showModal('<h3 class="modal-title">Borrar todo</h3><p class="modal-text">Se eliminaran <strong>todas</strong> (' + posts.length + '). Tambien de Google Sheet.</p><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-danger" onclick="clearAll()">Borrar todo</button></div>');
-}
-
-async function clearAll() {
-  try {
-    for (var i = 0; i < posts.length; i++) {
-      var fd = new URLSearchParams(); fd.append('action', 'delete'); fd.append('id', posts[i].id);
-      await fetch(API_URL, { method: 'POST', body: fd, redirect: 'follow' });
-    }
-    posts = []; closeModal(); showToast('Todo eliminado'); updateStats(); renderPosts();
-  } catch (e) { showToast('Error', 'error'); }
-}
-
-function showFirebaseGuide() {
-  showModal('<h3 class="modal-title">Como funciona</h3><div class="modal-text"><p><strong style="color:var(--accent);">Tu app administra tu Google Site:</strong></p><p style="margin-top:8px;">1. Creas publicaciones con fotos, videos o enlaces</p><p>2. Se guardan en tu Google Sheet</p><p>3. Tu Google Site las muestra automaticamente</p><p style="margin-top:16px;padding:12px;background:var(--accent-glow);border-radius:8px;border-left:3px solid var(--accent);">Puedes tener N publicaciones en cada pagina o subpagina.</p></div><div class="modal-actions"><button class="btn btn-primary" onclick="closeModal()">Entendido</button></div>');
-}
-
-// ===================================================================
-// INICIO
-// ===================================================================
-async function init() {
-  populatePageSelect();
-  await loadPosts();
-}
-
+async function init(){populatePageSelect();await loadPosts();}
 init();
 </script>
 </body>
