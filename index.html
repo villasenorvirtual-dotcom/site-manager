@@ -612,6 +612,17 @@
       </div>
     </div>
 
+    <div style="background:linear-gradient(135deg,#0d2e1f,#0a1f14);border:1px solid var(--accent-dim);border-radius:var(--radius);padding:20px;margin-bottom:20px;display:flex;align-items:center;gap:14px;cursor:pointer;transition:var(--transition);" onclick="showNotifModal()">
+      <div style="width:48px;height:48px;border-radius:14px;background:var(--accent-glow);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+        <i class="fas fa-bell" style="color:var(--accent);font-size:20px;"></i>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:15px;font-weight:700;">Enviar notificacion</div>
+        <div style="font-size:12px;color:var(--fg-muted);margin-top:2px;">Escribe un mensaje para toda la comunidad</div>
+      </div>
+      <i class="fas fa-chevron-right" style="color:var(--fg-dim);"></i>
+    </div>
+    
     <div class="search-bar">
       <i class="fas fa-search"></i>
       <input type="text" id="searchInput" placeholder="Buscar publicaciones..." oninput="renderPosts()">
@@ -1224,7 +1235,50 @@ function escapeHtml(t){if(!t)return '';var d=document.createElement('div');d.tex
 function exportData(){if(posts.length===0){showToast('No hay datos','info');return;}var b=new Blob([JSON.stringify({total:posts.length,posts:posts},null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='sitemanager_'+Date.now()+'.json';a.click();showToast('Exportado');}
 function confirmClearAll(){showModal('<h3 class="modal-title">Borrar todo</h3><p class="modal-text">Se eliminan todas ('+posts.length+').</p><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal()">Cancelar</button><button class="btn btn-danger" onclick="clearAll()">Borrar</button></div>');}
 async function clearAll(){try{for(var i=0;i<posts.length;i++){var fd=new URLSearchParams();fd.append('action','delete');fd.append('id',posts[i].id);await fetch(API_URL,{method:'POST',body:fd,redirect:'follow'});}posts=[];closeModal();showToast('Eliminado');updateStats();renderPosts();}catch(e){showToast('Error','error');}}
+function showNotifModal() {
+  showModal(
+    '<h3 class="modal-title">Enviar notificacion</h3>' +
+    '<p class="modal-text">El mensaje llegara a todos los dispositivos que activaron notificaciones.</p>' +
+    '<div class="form-group" style="margin-bottom:16px;">' +
+      '<label class="form-label">Titulo</label>' +
+      '<input class="form-input" type="text" id="notifTitle" placeholder="Ej: Aviso importante" maxlength="80">' +
+    '</div>' +
+    '<div class="form-group" style="margin-bottom:20px;">' +
+      '<label class="form-label">Mensaje</label>' +
+      '<textarea class="form-textarea" id="notifBody" placeholder="Ej: Mañana no hay clases..." maxlength="300" style="min-height:80px;"></textarea>' +
+    '</div>' +
+    '<div class="modal-actions">' +
+      '<button class="btn btn-secondary" onclick="closeModal()">Cancelar</button>' +
+      '<button class="btn btn-primary" style="flex:1;" onclick="sendStandaloneNotif()"><i class="fas fa-paper-plane"></i> Enviar</button>' +
+    '</div>'
+  );
+}
 
+async function sendStandaloneNotif() {
+  var title = document.getElementById('notifTitle').value.trim();
+  var body = document.getElementById('notifBody').value.trim();
+
+  if (!title) { showToast('Escribe un titulo', 'error'); return; }
+  if (!body) { showToast('Escribe un mensaje', 'error'); return; }
+
+  try {
+    var fd = new URLSearchParams();
+    fd.append('action', 'sendNotification');
+    fd.append('title', title);
+    fd.append('body', body);
+    var res = await fetch(API_URL, { method: 'POST', body: fd, redirect: 'follow' });
+    var result = await res.json();
+
+    if (result.success) {
+      closeModal();
+      showToast('Notificacion enviada a ' + result.sent + ' dispositivo' + (result.sent !== 1 ? 's' : ''));
+    } else {
+      showToast('Error: ' + (result.error || 'desconocido'), 'error');
+    }
+  } catch (e) {
+    showToast('Error de conexion', 'error');
+  }
+}
 function showFirebaseGuide(){showModal('<h3 class="modal-title">Como funciona</h3><div class="modal-text"><p><strong style="color:var(--accent);">Tu app administra tu Google Site:</strong></p><p style="margin-top:8px;">1. Creas publicaciones con fotos, videos, PDFs o enlaces</p><p>2. Se guardan en tu Google Sheet</p><p>3. Los archivos se guardan en tu Google Drive</p><p>4. Tu Google Site las muestra automaticamente</p></div><div class="modal-actions"><button class="btn btn-primary" onclick="closeModal()">Entendido</button></div>');}
 
 // ===================================================================
